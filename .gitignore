@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# secrets - never commit real values
+.env
+pico/secrets.py
+
+# virtual environment
+server/.venv/

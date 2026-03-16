@@ -160,12 +160,6 @@ def send_alert_if_needed() -> None:
             cur.execute(
                 "SELECT value FROM feeding_rules WHERE key IN ('alert_limit', 'notify_enabled') ORDER BY key"
             )
-            rules = {
-                r[0]: r[1] for r in [("alert_limit", "15"), ("notify_enabled", "true")]
-            }
-            for row in cur.fetchall():
-                pass  # 後で修正
-
             cur.execute("SELECT value FROM feeding_rules WHERE key = 'alert_limit'")
             row = cur.fetchone()
             limit = int(row[0]) if row else 15

@@ -22,12 +22,12 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 
 - **ゼロ操作**: 棚を開けるだけで自動記録。スマホ操作は不要です。
 - **既存サービスの活用**: 通知・照会はすべてLINEで完結。専用アプリは不要です。
-- **誤検知対策**: デバウンス 200ms・クールダウン 30秒・NTP時刻同期をデバイス側で処理します。
+- **誤検知対策**: デバウンス 200ms・クールダウン 100秒・NTP時刻同期をデバイス側で処理します。
 
 ## 主な機能
 
 - 給餌イベントの自動検知と記録
-- 1日3回（11時・16時・21時 JST）の定時まとめ通知
+- 1日2回（12時・18時 JST）の定時まとめ通知
 - 上限回数超過アラート（当日1回のみ）
 - LINEリッチメニューからの照会・設定変更
 
@@ -45,7 +45,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 ```
 [Pico W]
   Reed switch on GP14 (PULL_UP)
-  CLOSED→OPEN edge detection + debounce 200ms + cooldown 30s
+  CLOSED→OPEN edge detection + debounce 200ms + cooldown 100s
   → HTTPS POST /api/events (Bearer token)
 
 [Hetzner VPS — NixOS / systemd]
@@ -53,6 +53,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
   FastAPI :8001
   ├── POST /api/events       # event ingestion
   ├── POST /api/webhook/line # LINE webhook
+  ├── GET  /api/status       # dashboard summary
   └── GET  /healthz
   PostgreSQL 16
   ├── devices
@@ -62,7 +63,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
   └── alert_fired
 
 [LINE Messaging API]
-  Scheduled summaries at 11:00 / 16:00 / 21:00 JST
+  Scheduled summaries at 12:00 / 18:00 JST
   Rich menu: 今日の記録 / 平均 / 設定
 ```
 
@@ -74,8 +75,8 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 
 ## Key Features
 
-- **Auto event detection**: Reed switch edge detection with 200 ms debounce and 30 s cooldown
-- **Scheduled summaries**: LINE broadcast at 11:00 / 16:00 / 21:00 JST with per-interval breakdowns
+- **Auto event detection**: Reed switch edge detection with 200 ms debounce and 100 s cooldown
+- **Scheduled summaries**: LINE broadcast at 12:00 / 18:00 JST with per-interval breakdowns
 - **Overfeed alert**: Fires once per day when the daily count exceeds a configurable limit
 - **LINE rich menu**: Query today's log, weekly/monthly averages, or change settings — all from LINE
 
@@ -84,7 +85,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 | Service | Role | Runs on |
 |---|---|---|
 | FastAPI (`uvicorn`) | Event ingestion, LINE webhook receiver, scheduled notify | VPS (systemd) |
-| APScheduler | Scheduled summaries (11:00/16:00/21:00 JST), overfeed alert check (every 5 min) | In-process with FastAPI |
+| APScheduler | Scheduled summaries (12:00/18:00 JST), overfeed alert check (every 5 min) | In-process with FastAPI |
 | PostgreSQL 16 | Persist feed events, rules, alert state | VPS |
 | Nginx | Reverse proxy, Cloudflare-terminated HTTPS | VPS |
 | MicroPython (`main.py`) | Reed switch detection, HTTPS event POST | Pico W (runs on boot) |
@@ -140,15 +141,17 @@ cp .env.example .env
 
 #### Environment Variables
 
-| Variable | Used by | Description |
-|---|---|---|
-| `DB_HOST` / `DB_PORT` | Server | PostgreSQL host and port |
-| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | Server | PostgreSQL credentials |
-| `DEVICE_TOKEN` | Server + Pico W | Shared secret for Bearer auth on `/api/events` |
-| `LINE_CHANNEL_SECRET` | Server | Used to verify LINE webhook signatures |
-| `LINE_CHANNEL_ACCESS_TOKEN` | Server | Used to send messages via LINE Messaging API |
+##### Server (`.env`)
 
-On the Pico W side, the equivalent values live in `pico/secrets.py`:
+| Variable | Description |
+|---|---|
+| `DB_HOST` / `DB_PORT` | PostgreSQL host and port |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | PostgreSQL credentials |
+| `DEVICE_TOKEN` | Shared secret for Bearer auth on `/api/events`. Must match the Pico W side |
+| `LINE_CHANNEL_SECRET` | Used to verify LINE webhook signatures |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Used to send messages via LINE Messaging API |
+
+##### Pico W (`pico/secrets.py`)
 
 | Variable | Description |
 |---|---|
@@ -337,12 +340,22 @@ psql cat_feed_tracker -c "SELECT received_at FROM feed_events ORDER BY received_
 
 If a LINE channel is configured, trigger a manual summary via the rich menu (`今日の記録`) to confirm the full notification path.
 
+**Common errors**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `401 unauthorized` | `DEVICE_TOKEN` mismatch between `.env` and the request | Ensure the Bearer token matches the value in `.env` |
+| `403 device not registered` | Token is valid but no matching row in `devices` table | Run the `INSERT INTO devices ...` step in Getting Started §3 |
+| `502 Bad Gateway` | Nginx cannot reach uvicorn on port 8001 | Check `systemctl status cat-feed-tracker` and confirm the port |
+| `400 invalid signature` on `/api/webhook/line` | `LINE_CHANNEL_SECRET` is wrong or missing | Verify the value in `.env` matches LINE Developers Console |
+
 ## API Reference
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/events` | Bearer token | Ingest a feed event from Pico W |
 | `POST` | `/api/webhook/line` | LINE signature | LINE Webhook receiver |
+| `GET` | `/api/status` | — | Dashboard summary (today's count, averages) |
 | `GET` | `/healthz` | — | Health check |
 
 ### POST /api/events

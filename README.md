@@ -5,7 +5,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 <p align="center">
   <picture>
     <source media="(min-width: 800px)" srcset="./src/cat-feed-tracker.svg">
-    <img src="./src/cat-feed-tracker.svg" alt="cat-feed-tracker Architecture" style="max-width: 100%;" width="400">
+    <img src="./src/cat-feed-tracker.svg" alt="cat-feed-tracker Architecture" style="max-width: 100%;" width="300">
   </picture>
 </p>
 
@@ -159,7 +159,10 @@ On the Pico W side, the equivalent values live in `pico/secrets.py`:
 ### 3. PostgreSQL
 
 ```bash
-createdb cat_feed_tracker
+# Create role and database
+sudo -u postgres psql -c "CREATE ROLE cat_feed_tracker LOGIN PASSWORD 'your_db_password';"
+createdb -O cat_feed_tracker cat_feed_tracker
+
 psql cat_feed_tracker < server/migrations/001_initial.sql
 psql cat_feed_tracker < server/migrations/002_m2.sql
 
@@ -167,6 +170,8 @@ psql cat_feed_tracker < server/migrations/002_m2.sql
 sudo -u postgres psql cat_feed_tracker -c "
   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO cat_feed_tracker;
   GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO cat_feed_tracker;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO cat_feed_tracker;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO cat_feed_tracker;
 "
 
 # Register device (use the same token as DEVICE_TOKEN in .env)
@@ -207,6 +212,18 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl enable --now cat-feed-tracker
+```
+
+Verify the reverse proxy is routing correctly before connecting the Pico W:
+
+```bash
+# Health check through Nginx
+curl http://localhost/healthz
+# {"status":"ok"}
+
+# Confirm LINE webhook path is reachable (expects 400 on missing signature, not 502)
+curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost/api/webhook/line
+# 400
 ```
 
 ### 5. Pico W
@@ -277,7 +294,7 @@ The rich menu exposes three buttons. Each sends a text message to the webhook, w
 | 平均 | `平均` | Returns weekly (last 4 weeks) and monthly (last 3 months) averages |
 | 設定 | `設定` | Shows current notify on/off and alert limit; prompts for changes |
 
-Additional text commands: `通知オン` / `通知オフ` toggle notifications; `上限変更` starts a dialog to update the daily alert threshold.
+Additional text commands: `通知オン` / `通知オフ` toggle notifications; `上限変更` starts a two-step dialog — the server replies asking for a number, and the next message you send (e.g. `5`) sets the new daily limit. Send `キャンセル` at any point to abort.
 
 ### 7. Nginx
 
@@ -293,14 +310,32 @@ server {
 }
 ```
 
-> HTTPS is handled by Cloudflare (Flexible mode). No certificates needed on the server.
+> Cloudflare handles TLS termination. **Full (strict)** mode with an origin certificate is recommended for production. Flexible mode works but leaves the VPS↔Cloudflare leg unencrypted.
 
 ### 8. Verify
+
+**Health check**
 
 ```bash
 curl https://your-domain.example.com/healthz
 # {"status":"ok"}
 ```
+
+**End-to-end: inject an event and confirm DB**
+
+```bash
+# 1. POST a test event
+curl -X POST https://your-domain.example.com/api/events \
+  -H "Authorization: Bearer your-device-token" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# {"status":"ok","event_id":1,"received_at":"..."}
+
+# 2. Confirm it landed in PostgreSQL
+psql cat_feed_tracker -c "SELECT received_at FROM feed_events ORDER BY received_at DESC LIMIT 1;"
+```
+
+If a LINE channel is configured, trigger a manual summary via the rich menu (`今日の記録`) to confirm the full notification path.
 
 ## API Reference
 

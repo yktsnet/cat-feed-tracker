@@ -14,42 +14,14 @@ from linebot.v3.messaging import (
     TextMessage,
 )
 from app.db.connection import get_conn
-from app.line.notify import build_scheduled_message
-
-logger = logging.getLogger(__name__)
+from app.line.notify import build_scheduled_message, build_today_message
 
 JST = timedelta(hours=9)
 
-# 上限変更の対話状態（メモリ管理、再起動でリセットされるが許容）
-_waiting_limit_input: set[str] = set()
-
-
-def _get_line_api() -> MessagingApi:
-    config = Configuration(access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN", ""))
-    return MessagingApi(ApiClient(config))
-
-
-def _reply(reply_token: str, text: str) -> None:
-    api = _get_line_api()
-    api.reply_message(
-        ReplyMessageRequest(
-            reply_token=reply_token,
-            messages=[TextMessage(text=text)],
-        )
-    )
-
 
 def handle_today(reply_token: str) -> None:
-    """今日の記録：現時点までの累計"""
-    now_jst_hour = (datetime.now(timezone.utc) + JST).hour
-    if now_jst_hour < 11:
-        slot = "morning"
-    elif now_jst_hour < 16:
-        slot = "afternoon"
-    else:
-        slot = "night"
-
-    body = build_scheduled_message(slot)
+    """今日の記録：0時JSTから現在時刻までの全件"""
+    body = build_today_message()
     if body is None:
         body = "🐱 今日はまだ給餌の記録がありません"
     _reply(reply_token, body)
@@ -59,10 +31,10 @@ def handle_average(reply_token: str) -> None:
     """週平均（直近4週）・月平均（直近3ヶ月）"""
     now_utc = datetime.now(timezone.utc)
     today_jst = (now_utc + JST).date()
-    day_start_utc = datetime(
-        today_jst.year, today_jst.month, today_jst.day,
-        tzinfo=timezone.utc
-    ) - JST
+    day_start_utc = (
+        datetime(today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc)
+        - JST
+    )
 
     conn = get_conn()
     try:
@@ -79,7 +51,9 @@ def handle_average(reply_token: str) -> None:
                 count = cur.fetchone()[0]
                 w_start_jst = (w_start + JST).date()
                 w_end_jst = (w_end + JST).date()
-                week_lines.append(f" {w_start_jst.strftime('%m/%d')}〜{w_end_jst.strftime('%m/%d')}  {count}回")
+                week_lines.append(
+                    f" {w_start_jst.strftime('%m/%d')}〜{w_end_jst.strftime('%m/%d')}  {count}回"
+                )
 
             # 月平均：直近3ヶ月
             month_lines = ["月平均（直近3ヶ月）"]
@@ -94,14 +68,24 @@ def handle_average(reply_token: str) -> None:
                 else:
                     m_end_jst = target.replace(month=target.month + 1, day=1)
 
-                m_start_utc = datetime(
-                    m_start_jst.year, m_start_jst.month, m_start_jst.day,
-                    tzinfo=timezone.utc
-                ) - JST
-                m_end_utc = datetime(
-                    m_end_jst.year, m_end_jst.month, m_end_jst.day,
-                    tzinfo=timezone.utc
-                ) - JST
+                m_start_utc = (
+                    datetime(
+                        m_start_jst.year,
+                        m_start_jst.month,
+                        m_start_jst.day,
+                        tzinfo=timezone.utc,
+                    )
+                    - JST
+                )
+                m_end_utc = (
+                    datetime(
+                        m_end_jst.year,
+                        m_end_jst.month,
+                        m_end_jst.day,
+                        tzinfo=timezone.utc,
+                    )
+                    - JST
+                )
 
                 cur.execute(
                     "SELECT COUNT(*) FROM feed_events WHERE received_at >= %s AND received_at < %s",
@@ -154,7 +138,10 @@ def handle_message(user_id: str, reply_token: str, text: str) -> None:
             _reply(reply_token, "キャンセルしました。")
             return
         if not text.isdigit():
-            _reply(reply_token, "数字を入力してください。（キャンセルする場合は「キャンセル」）")
+            _reply(
+                reply_token,
+                "数字を入力してください。（キャンセルする場合は「キャンセル」）",
+            )
             return
         new_limit = int(text)
         if new_limit < 1:
@@ -171,7 +158,9 @@ def handle_message(user_id: str, reply_token: str, text: str) -> None:
         finally:
             conn.close()
         _waiting_limit_input.discard(user_id)
-        _reply(reply_token, f"上限を{new_limit}回に変更しました。本日から適用されます。")
+        _reply(
+            reply_token, f"上限を{new_limit}回に変更しました。本日から適用されます。"
+        )
         return
 
     # 通常メッセージ
@@ -196,7 +185,10 @@ def handle_message(user_id: str, reply_token: str, text: str) -> None:
         finally:
             conn.close()
         _waiting_limit_input.add(user_id)
-        _reply(reply_token, f"1日の上限を何回にしますか？（現在：{current}回）\n（キャンセルする場合は「キャンセル」）")
+        _reply(
+            reply_token,
+            f"1日の上限を何回にしますか？（現在：{current}回）\n（キャンセルする場合は「キャンセル」）",
+        )
     else:
         # リッチメニュー以外の入力は無視（返信なし）
         pass

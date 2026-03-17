@@ -38,14 +38,12 @@ def build_scheduled_message(slot: str) -> str | None:
     その日の0時JSTからslot時刻までの全イベントを累計で返す
     """
     slot_labels = {
-        "morning": "〜11:00",
-        "afternoon": "〜16:00",
-        "night": "〜21:00",
+        "noon": "〜12:00",
+        "evening": "〜18:00",
     }
     slot_utc_hours = {
-        "morning": 11,  # UTC 02:00
-        "afternoon": 16,  # UTC 07:00
-        "night": 21,  # UTC 12:00
+        "noon": 12,  # UTC 03:00
+        "evening": 18,  # UTC 09:00
     }
 
     now_utc = datetime.now(timezone.utc)
@@ -80,9 +78,8 @@ def build_scheduled_message(slot: str) -> str | None:
 
     # スロットごとに区切り線で分けて累計表示
     slot_boundaries_jst = {
-        "morning": [11],
-        "afternoon": [11, 16],
-        "night": [11, 16, 21],
+        "noon": [12],
+        "evening": [12, 18],
     }
     boundaries = slot_boundaries_jst[slot]
 
@@ -101,7 +98,6 @@ def build_scheduled_message(slot: str) -> str | None:
                 if section_count > 0:
                     lines.append("─────────")
                 prev_boundary = b
-                prev_time = None  # セクション区切りで間隔リセット
 
         time_str = jst_time.strftime("%H:%M")
         if prev_time is None:
@@ -112,6 +108,50 @@ def build_scheduled_message(slot: str) -> str | None:
 
         prev_time = received_at
         section_count += 1
+
+    lines.append(f"\n本日計{len(rows)}回")
+    return "\n".join(lines)
+
+
+def build_today_message() -> str | None:
+    """今日の記録：0時JSTから現在時刻までの全イベント"""
+    now_utc = datetime.now(timezone.utc)
+    today_jst = (now_utc + JST).date()
+    day_start_utc = (
+        datetime(today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc)
+        - JST
+    )
+
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT received_at
+                FROM feed_events
+                WHERE received_at >= %s AND received_at < %s
+                ORDER BY received_at ASC
+                """,
+                (day_start_utc, now_utc),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return None
+
+    lines = ["🐱 今日の記録\n"]
+    prev_time = None
+    for (received_at,) in rows:
+        jst_time = received_at + JST
+        time_str = jst_time.strftime("%H:%M")
+        if prev_time is None:
+            lines.append(time_str)
+        else:
+            diff = int((received_at - prev_time).total_seconds() / 60)
+            lines.append(f"{time_str}  {_format_duration(diff)}")
+        prev_time = received_at
 
     lines.append(f"\n本日計{len(rows)}回")
     return "\n".join(lines)
@@ -131,9 +171,7 @@ def send_scheduled_notify(slot: str) -> None:
 
     body = build_scheduled_message(slot)
     if body is None:
-        slot_label = {"morning": "〜11:00", "afternoon": "〜16:00", "night": "〜21:00"}[
-            slot
-        ]
+        slot_label = {"noon": "〜12:00", "evening": "〜18:00"}[slot]
         body = f"🐱 給餌まとめ（{slot_label}）\n\nこの時間帯の記録はありません"
     api = _get_line_api()
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=body)]))

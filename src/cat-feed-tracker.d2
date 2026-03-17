@@ -1,0 +1,113 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 200
+    sketch: true
+    pad: 20
+  }
+  primary: "#f97316"
+  primary-light: "#fb923c"
+  bg-dark: "#0f172a"
+  bg-node: "#1e293b"
+  border-node: "#334155"
+  text-main: "#f1f5f9"
+  text-accent: "#fdba74"
+}
+
+classes: {
+  box_node: {
+    style: {
+      font-size: 18
+      stroke-width: 1
+      border-radius: 6
+      fill: ${bg-node}
+      stroke: ${border-node}
+      font-color: ${text-main}
+    }
+  }
+  accent_node: {
+    style: {
+      font-size: 18
+      stroke-width: 2
+      border-radius: 6
+      fill: ${bg-dark}
+      stroke: ${primary}
+      font-color: ${text-accent}
+    }
+  }
+  container_box: {
+    style: {
+      fill: ${bg-dark}
+      stroke: ${bg-node}
+      stroke-dash: 0
+      border-radius: 12
+    }
+  }
+}
+
+direction: down
+
+Cat: "🐱 Feeding Shelf" {
+  shape: person
+  style: {
+    fill: ${primary}
+    stroke: ${primary-light}
+  }
+}
+
+Edge: "Edge Node (Pico W)" {
+  class: container_box
+  Switch: "Reed Switch" { class: box_node }
+  Logic: "MicroPython" {
+    class: accent_node
+    shape: hexagon
+  }
+  Switch -> Logic: "edge detect" {
+    style: { stroke: ${primary}; stroke-width: 2 }
+  }
+}
+
+Server: "VPS (Hetzner)" {
+  class: container_box
+  API: "FastAPI" { class: accent_node; shape: hexagon }
+  DB: "PostgreSQL 16" {
+    shape: cylinder
+    class: box_node
+  }
+  API -> DB: "read / write" { style: { stroke: ${primary} } }
+}
+
+Notify: "LINE Messaging API" {
+  class: container_box
+  Push: "Broadcast" { class: box_node }
+  Webhook: "Webhook" { class: box_node }
+  Webhook -> Push: "reply / push"
+}
+
+Cat -> Edge.Switch: "shelf opens" {
+  style: {
+    stroke: ${primary}
+    stroke-width: 3
+    animated: true
+  }
+}
+
+Edge.Logic -> Server.API: "HTTPS POST /api/events" {
+  style: {
+    stroke: ${primary}
+    stroke-dash: 4
+    animated: true
+  }
+}
+
+Server.API -> Notify.Push: "summary / alert" {
+  style: {
+    stroke: ${primary}
+    stroke-dash: 4
+    animated: true
+  }
+}
+
+Notify.Webhook -> Server.API: "LINE webhook" {
+  style: { stroke: ${primary} }
+}

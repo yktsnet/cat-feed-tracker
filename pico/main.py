@@ -29,6 +29,11 @@ COOLDOWN_SEC = 30
 RETRY_MAX = 3
 RETRY_WAIT_MS = 2000
 
+# 連続エラーがこの回数に達したら machine.reset()
+MAX_CONSECUTIVE_ERRORS = 10
+# WiFi 接続状態を確認する間隔（秒）
+WIFI_CHECK_INTERVAL_SEC = 60
+
 switch = Pin(PIN_SWITCH, Pin.IN, Pin.PULL_UP)
 last_open_time = 0
 
@@ -45,6 +50,25 @@ def connect_wifi():
             return True
         utime.sleep(1)
     print("WiFi connect failed")
+    return False
+
+
+def ensure_wifi():
+    """WiFi が切れていたら再接続を試みる。成功で True。"""
+    wlan = network.WLAN(network.STA_IF)
+    if wlan.isconnected():
+        return True
+    print("WiFi lost, reconnecting...")
+    wlan.active(False)
+    utime.sleep(1)
+    wlan.active(True)
+    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+    for _ in range(20):
+        if wlan.isconnected():
+            print("WiFi reconnected:", wlan.ifconfig()[0])
+            return True
+        utime.sleep(1)
+    print("WiFi reconnect failed")
     return False
 
 
@@ -100,20 +124,64 @@ def main():
         "cat-feed-tracker started. initial state:", "OPEN" if prev_state else "CLOSED"
     )
 
+    consecutive_errors = 0
+    last_wifi_check = utime.time()
+
     while True:
-        current_state = switch.value()
-        if prev_state == 0 and current_state == 1:
-            utime.sleep_ms(DEBOUNCE_MS)
-            if switch.value() == 1:
-                now = utime.time()
-                if now - last_open_time >= COOLDOWN_SEC:
-                    last_open_time = now
-                    print("shelf opened → sending event")
-                    send_event(iso_now())
-                else:
-                    print("cooldown active, skip")
-        prev_state = current_state
-        utime.sleep_ms(50)
+        try:
+            # 定期的に WiFi 接続を確認
+            now = utime.time()
+            if now - last_wifi_check >= WIFI_CHECK_INTERVAL_SEC:
+                last_wifi_check = now
+                if not ensure_wifi():
+                    print("WiFi unavailable, will retry later")
+                    consecutive_errors += 1
+                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                        print("too many errors, resetting...")
+                        utime.sleep(2)
+                        machine.reset()
+                    continue
+
+            current_state = switch.value()
+            if prev_state == 0 and current_state == 1:
+                utime.sleep_ms(DEBOUNCE_MS)
+                if switch.value() == 1:
+                    now = utime.time()
+                    if now - last_open_time >= COOLDOWN_SEC:
+                        last_open_time = now
+                        print("shelf opened → sending event")
+                        if not ensure_wifi():
+                            print("WiFi down, event lost")
+                            consecutive_errors += 1
+                        elif not send_event(iso_now()):
+                            consecutive_errors += 1
+                        else:
+                            consecutive_errors = 0
+                    else:
+                        print("cooldown active, skip")
+            prev_state = current_state
+
+            # イベント送信がなかった通常ループでもリセット
+            # （上の if ブロックに入らなかった＝正常動作）
+            if not (prev_state == 0 and current_state == 1):
+                consecutive_errors = 0
+            utime.sleep_ms(50)
+
+        except KeyboardInterrupt:
+            print("interrupted, exiting")
+            break
+        except Exception as e:
+            consecutive_errors += 1
+            print(
+                "loop error ({}/{}): {}".format(
+                    consecutive_errors, MAX_CONSECUTIVE_ERRORS, e
+                )
+            )
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                print("too many consecutive errors, resetting...")
+                utime.sleep(2)
+                machine.reset()
+            utime.sleep(5)
 
 
 main()

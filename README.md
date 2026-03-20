@@ -29,13 +29,13 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 - 給餌イベントの自動検知と記録
 - 1日2回（12時・18時 JST）の定時まとめ通知
 - 上限回数超過アラート（当日1回のみ）
-- LINEリッチメニューからの照会・設定変更
+- LINEリッチメニューからの照会・設定変更・体重記録
 
 ## システム構成
 
 1. **エッジ (Pico W)**: リードスイッチの開閉をGP14で検知し、デバウンス・クールダウン処理を経てイベントを送信します。
 2. **サーバー (VPS)**: FastAPI でイベントを受信・記録し、APScheduler で定時通知とアラートチェックを実行します。
-3. **データベース**: PostgreSQL 16 で給餌イベント・通知ルール・アラート履歴を管理します。
+3. **データベース**: PostgreSQL 16 で給餌イベント・通知ルール・アラート履歴・体重記録を管理します。
 4. **通知**: LINE Messaging API のブロードキャストで家族全員に一斉通知し、Webhook 経由で照会・設定変更に対応します。
 
 </details>
@@ -60,11 +60,12 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
   ├── feed_events
   ├── feeding_rules
   ├── notification_logs
-  └── alert_fired
+  ├── alert_fired
+  └── cat_weights
 
 [LINE Messaging API]
   Scheduled summaries at 12:00 / 18:00 JST
-  Rich menu: 今日の記録 / 平均 / 設定
+  Rich menu: 今日の記録 / 平均 / 体重 / 設定
 ```
 
 ## Design Concept
@@ -78,7 +79,8 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 - **Auto event detection**: Reed switch edge detection with 200 ms debounce and 100 s cooldown
 - **Scheduled summaries**: LINE broadcast at 12:00 / 18:00 JST with per-interval breakdowns
 - **Overfeed alert**: Fires once per day when the daily count exceeds a configurable limit
-- **LINE rich menu**: Query today's log, weekly/monthly averages, or change settings — all from LINE
+- **Weight tracking**: Log each cat's weight via LINE and see the last 5 entries alongside feeding averages
+- **LINE rich menu**: Query today's log, weekly/monthly averages, weight, or change settings — all from LINE
 
 ## Service Layout
 
@@ -86,7 +88,7 @@ An IoT system that detects cat feeding events via a reed switch on a Pico W and 
 |---|---|---|
 | FastAPI (`uvicorn`) | Event ingestion, LINE webhook receiver, scheduled notify | VPS (systemd) |
 | APScheduler | Scheduled summaries (12:00/18:00 JST), overfeed alert check (every 5 min) | In-process with FastAPI |
-| PostgreSQL 16 | Persist feed events, rules, alert state | VPS |
+| PostgreSQL 16 | Persist feed events, rules, alert state, cat weights | VPS |
 | Nginx | Reverse proxy, Cloudflare-terminated HTTPS | VPS |
 | MicroPython (`main.py`) | Reed switch detection, HTTPS event POST | Pico W (runs on boot) |
 
@@ -168,6 +170,7 @@ createdb -O cat_feed_tracker cat_feed_tracker
 
 psql cat_feed_tracker < server/migrations/001_initial.sql
 psql cat_feed_tracker < server/migrations/002_m2.sql
+psql cat_feed_tracker < server/migrations/003_weight.sql
 
 # Grant privileges
 sudo -u postgres psql cat_feed_tracker -c "
@@ -289,15 +292,39 @@ event sent ok: 2026-03-17T10:00:00Z
 
 #### Rich Menu / Webhook Flow
 
-The rich menu exposes three buttons. Each sends a text message to the webhook, which routes it as follows:
+The rich menu is a 2×2 grid. Each cell sends a text message to the webhook:
 
 | Button | Text sent | Action |
 |---|---|---|
-| 今日の記録 | `今日の記録` | Returns today's feed log up to the current time slot |
-| 平均 | `平均` | Returns weekly (last 4 weeks) and monthly (last 3 months) averages |
+| 今日の記録 | `今日の記録` | Returns today's feed log up to the current time |
+| 平均 | `平均` | Returns weekly (last 4 weeks) and monthly (last 3 months) averages, calculated over days with at least one event |
+| 体重 | `体重` | Starts a two-step dialog to select a cat and record its weight; returns the last 5 entries and current feeding averages |
 | 設定 | `設定` | Shows current notify on/off and alert limit; prompts for changes |
 
-Additional text commands: `通知オン` / `通知オフ` toggle notifications; `上限変更` starts a two-step dialog — the server replies asking for a number, and the next message you send (e.g. `5`) sets the new daily limit. Send `キャンセル` at any point to abort.
+Additional text commands: `通知オン` / `通知オフ` toggle notifications; `上限変更` starts a dialog to set a new daily limit. Send `キャンセル` at any point to abort.
+
+#### Rich Menu setup
+
+```bash
+# NixOS
+nix-shell -p python3Packages.pillow --run "python server/scripts/setup_rich_menu.py"
+
+# Other
+pip install Pillow
+LINE_CHANNEL_ACCESS_TOKEN=xxxx python server/scripts/setup_rich_menu.py
+```
+
+#### Sample weight data (for testing)
+
+```sql
+INSERT INTO cat_weights (cat_id, weight_kg, recorded_at) VALUES
+  (1, 4.2, '2026-01-15'), (1, 4.3, '2026-02-01'), (1, 4.1, '2026-02-15'),
+  (1, 4.4, '2026-03-01'), (1, 4.3, '2026-03-15'),  -- Tama
+  (2, 3.8, '2026-01-15'), (2, 3.9, '2026-02-01'), (2, 3.7, '2026-02-15'),
+  (2, 3.8, '2026-03-01'), (2, 3.9, '2026-03-15'),  -- Mike
+  (3, 5.1, '2026-01-15'), (3, 5.0, '2026-02-01'), (3, 5.2, '2026-02-15'),
+  (3, 5.1, '2026-03-01'), (3, 5.3, '2026-03-15');  -- Kuro
+```
 
 ### 7. Nginx
 

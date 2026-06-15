@@ -99,8 +99,8 @@ mpremote connect /dev/ttyACM0 fs cp pico/main.py :main.py + reset
 
 各設定の詳細や本番運用については、以下のドキュメントを参照してください。
 
-- **[本番デプロイ手順](file:///wsl.localhost/Ubuntu/home/widget/projects/clone-repos/cat-feed-tracker/docs/deploy.md)** (systemd, Nginx, 疎通確認など)
-- **[LINE リッチメニューと Webhook 連携仕様](file:///wsl.localhost/Ubuntu/home/widget/projects/clone-repos/cat-feed-tracker/docs/rich_menu.md)** (リッチメニューの設定・対話コマンドフロー・サンプルデータ)
+- **[本番デプロイ手順](./docs/deploy.md)** (systemd, Nginx, 疎通確認など)
+- **[LINE リッチメニューと Webhook 連携仕様](./docs/rich_menu.md)** (リッチメニューの設定・対話コマンドフロー・サンプルデータ)
 
 ---
 

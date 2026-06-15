@@ -1,5 +1,7 @@
 # cat-feed-tracker
 
+[![CI](https://github.com/yktsnet/cat-feed-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/cat-feed-tracker/actions/workflows/ci.yml)
+
 Pico W のリードスイッチを介して給餌棚の開閉イベントを検知し、LINE で家族に通知を届ける IoT システムです。
 
 <p align="center">

@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status, Response
 from pydantic import BaseModel
 from app.db.connection import get_conn
 
@@ -19,6 +19,7 @@ class EventIn(BaseModel):
 @router.post("/events", status_code=status.HTTP_201_CREATED)
 def receive_event(
     body: EventIn,
+    response: Response,
     authorization: str = Header(...),
 ):
     # トークン検証
@@ -53,6 +54,7 @@ def receive_event(
                 if cur.fetchone():
                     # 30秒以内の重複はスキップ（エラーではなく 200 で返す）
                     logger.warning("duplicate event ignored: device_id=%s", device_id)
+                    response.status_code = status.HTTP_200_OK
                     return {"status": "duplicate", "ignored": True}
 
                 # 保存

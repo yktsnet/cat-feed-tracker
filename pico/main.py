@@ -141,6 +141,9 @@ def main():
                         utime.sleep(2)
                         machine.reset()
                     continue
+                else:
+                    consecutive_errors = 0
+
 
             current_state = switch.value()
             if prev_state == 0 and current_state == 1:
@@ -161,10 +164,6 @@ def main():
                         print("cooldown active, skip")
             prev_state = current_state
 
-            # イベント送信がなかった通常ループでもリセット
-            # （上の if ブロックに入らなかった＝正常動作）
-            if not (prev_state == 0 and current_state == 1):
-                consecutive_errors = 0
             utime.sleep_ms(50)
 
         except KeyboardInterrupt:

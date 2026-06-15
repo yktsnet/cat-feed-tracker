@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 JST = timedelta(hours=9)
 
+SLOT_LABELS = {
+    "morning": "〜11:00",
+    "afternoon": "〜16:00",
+    "night": "〜21:00",
+}
+
 
 def _get_line_api() -> MessagingApi:
     config = Configuration(access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN", ""))
@@ -37,13 +43,10 @@ def build_scheduled_message(slot: str) -> str | None:
     slot: 'morning'(〜11:00JST) | 'afternoon'(〜16:00JST) | 'night'(〜21:00JST)
     その日の0時JSTからslot時刻までの全イベントを累計で返す
     """
-    slot_labels = {
-        "noon": "〜12:00",
-        "evening": "〜18:00",
-    }
     slot_utc_hours = {
-        "noon": 12,  # UTC 03:00
-        "evening": 18,  # UTC 09:00
+        "morning": 11,
+        "afternoon": 16,
+        "night": 21,
     }
 
     now_utc = datetime.now(timezone.utc)
@@ -58,6 +61,7 @@ def build_scheduled_message(slot: str) -> str | None:
     slot_end_utc = day_start_utc + JST + timedelta(hours=slot_end_jst_hour) - JST
 
     conn = get_conn()
+
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -78,12 +82,13 @@ def build_scheduled_message(slot: str) -> str | None:
 
     # スロットごとに区切り線で分けて累計表示
     slot_boundaries_jst = {
-        "noon": [12],
-        "evening": [12, 18],
+        "morning": [],
+        "afternoon": [11],
+        "night": [11, 16],
     }
     boundaries = slot_boundaries_jst[slot]
 
-    lines = [f"🐱 給餌まとめ（{slot_labels[slot]}）\n"]
+    lines = [f"🐱 給餌まとめ（{SLOT_LABELS[slot]}）\n"]
     prev_time = None
     prev_boundary = 0
     section_count = 0
@@ -94,10 +99,11 @@ def build_scheduled_message(slot: str) -> str | None:
 
         # 区切り線を挿入
         for b in boundaries:
-            if prev_boundary < b <= hour and b != boundaries[-1]:
+            if prev_boundary < b <= hour:
                 if section_count > 0:
                     lines.append("─────────")
                 prev_boundary = b
+
 
         time_str = jst_time.strftime("%H:%M")
         if prev_time is None:
@@ -171,8 +177,9 @@ def send_scheduled_notify(slot: str) -> None:
 
     body = build_scheduled_message(slot)
     if body is None:
-        slot_label = {"noon": "〜12:00", "evening": "〜18:00"}[slot]
+        slot_label = SLOT_LABELS.get(slot, slot)
         body = f"🐱 給餌まとめ（{slot_label}）\n\nこの時間帯の記録はありません"
+
     api = _get_line_api()
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=body)]))
     logger.info("scheduled notify sent: slot=%s", slot)

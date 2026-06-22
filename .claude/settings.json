@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push origin main*)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(ssh *)",
+      "Bash(rsync *)",
+      "Bash(uvicorn *)",
+      "Bash(python -m uvicorn *)"
+    ],
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh pr *)",
+      "Bash(cd server && PYTHONPATH=. pytest*)",
+      "Bash(python -m py_compile *)",
+      "Bash(pip install *)"
+    ]
+  },
+  "attribution": { "commit": "", "pr": "" }
+}

@@ -8,3 +8,6 @@ pico/secrets.py
 
 # virtual environment
 server/.venv/
+
+# claude code local overrides
+.claude/settings.local.json

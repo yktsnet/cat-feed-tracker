@@ -1,3 +1,5 @@
+[🇯🇵 日本語](README.md) | [🇬🇧 English](README.en.md)
+
 # cat-feed-tracker
 
 [![CI](https://github.com/yktsnet/cat-feed-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/yktsnet/cat-feed-tracker/actions/workflows/ci.yml)

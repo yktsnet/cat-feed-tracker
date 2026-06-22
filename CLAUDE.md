@@ -18,6 +18,6 @@
 
 ## 検証手段
 
-- `cd server && PYTHONPATH=. pytest`
+- `nix-shell --run "cd server && PYTHONPATH=. pytest"`
 - 変更した `.py` に `python -m py_compile`
 - `pico/` 変更時は MicroPython 構文互換を目視確認（標準 Python では import 不可）

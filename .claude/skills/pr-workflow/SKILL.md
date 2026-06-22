@@ -14,7 +14,7 @@ disable-model-invocation: true
 3. `git checkout -b claude/{id}-{branch-slug}`（id と branch-slug は issue から取得）
 4. 対象ファイルを読んで実装
 5. issue の「確認」項目に従い静的チェックを実施する
-   - `cd server && PYTHONPATH=. pytest`
+   - `nix-shell --run "cd server && PYTHONPATH=. pytest"`
    - 変更した `.py` に `python -m py_compile`
    - `pico/` 変更時は MicroPython 構文互換を目視確認
    - issue 固有の確認があればそれも実施

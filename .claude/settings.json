@@ -14,7 +14,7 @@
       "Bash(gh pr *)",
       "Bash(cd server && PYTHONPATH=. pytest*)",
       "Bash(python -m py_compile *)",
-      "Bash(pip install *)"
+      "Bash(nix-shell --run *)"
     ]
   },
   "attribution": { "commit": "", "pr": "" }

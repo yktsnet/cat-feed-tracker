@@ -5,7 +5,7 @@ LINE通知送信ロジック
 
 import os
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from linebot.v3.messaging import (
     Configuration,
     ApiClient,
@@ -14,16 +14,9 @@ from linebot.v3.messaging import (
     TextMessage,
 )
 from app.db.connection import get_conn
+from app.config import get_tz, NOTIFY_SLOTS
 
 logger = logging.getLogger(__name__)
-
-JST = timedelta(hours=9)
-
-SLOT_LABELS = {
-    "morning": "〜11:00",
-    "afternoon": "〜16:00",
-    "night": "〜21:00",
-}
 
 
 def _get_line_api() -> MessagingApi:
@@ -38,27 +31,25 @@ def _format_duration(minutes: int) -> str:
     return f"+{h}時間{m}分" if m else f"+{h}時間"
 
 
-def build_scheduled_message(slot: str) -> str | None:
+def build_scheduled_message(slot_idx: int) -> str | None:
     """
-    slot: 'morning'(〜11:00JST) | 'afternoon'(〜16:00JST) | 'night'(〜21:00JST)
-    その日の0時JSTからslot時刻までの全イベントを累計で返す
+    slot_idx: NOTIFY_SLOTS のインデックス（0=1スロット目、1=2スロット目、…）
+    その日の0時ローカルからslot時刻までの全イベントを累計で返す
     """
-    slot_utc_hours = {
-        "morning": 11,
-        "afternoon": 16,
-        "night": 21,
-    }
+    tz = get_tz()
+    slots = NOTIFY_SLOTS
+    slot_hour, slot_minute = slots[slot_idx]
+    slot_label = f"〜{slot_hour:02d}:{slot_minute:02d}"
 
     now_utc = datetime.now(timezone.utc)
-    # 今日の0時JST = 今日のUTC 前日15:00 or 当日15:00
-    today_jst = (now_utc + JST).date()
-    day_start_utc = (
-        datetime(today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc)
-        - JST
-    )
-
-    slot_end_jst_hour = slot_utc_hours[slot]
-    slot_end_utc = day_start_utc + JST + timedelta(hours=slot_end_jst_hour) - JST
+    today_local = now_utc.astimezone(tz).date()
+    day_start_utc = datetime(
+        today_local.year, today_local.month, today_local.day, tzinfo=tz
+    ).astimezone(timezone.utc)
+    slot_end_utc = datetime(
+        today_local.year, today_local.month, today_local.day,
+        slot_hour, slot_minute, tzinfo=tz,
+    ).astimezone(timezone.utc)
 
     conn = get_conn()
 
@@ -80,22 +71,17 @@ def build_scheduled_message(slot: str) -> str | None:
     if not rows:
         return None
 
-    # スロットごとに区切り線で分けて累計表示
-    slot_boundaries_jst = {
-        "morning": [],
-        "afternoon": [11],
-        "night": [11, 16],
-    }
-    boundaries = slot_boundaries_jst[slot]
+    # それ以前のスロット境界時刻（hour のみ）で区切り線を挿入
+    boundaries = [h for h, _ in slots[:slot_idx]]
 
-    lines = [f"🐱 給餌まとめ（{SLOT_LABELS[slot]}）\n"]
+    lines = [f"🐱 給餌まとめ（{slot_label}）\n"]
     prev_time = None
     prev_boundary = 0
     section_count = 0
 
-    for i, (received_at,) in enumerate(rows):
-        jst_time = received_at + JST
-        hour = jst_time.hour
+    for _, (received_at,) in enumerate(rows):
+        local_time = received_at.astimezone(tz)
+        hour = local_time.hour
 
         # 区切り線を挿入
         for b in boundaries:
@@ -104,8 +90,7 @@ def build_scheduled_message(slot: str) -> str | None:
                     lines.append("─────────")
                 prev_boundary = b
 
-
-        time_str = jst_time.strftime("%H:%M")
+        time_str = local_time.strftime("%H:%M")
         if prev_time is None:
             lines.append(time_str)
         else:
@@ -120,13 +105,13 @@ def build_scheduled_message(slot: str) -> str | None:
 
 
 def build_today_message() -> str | None:
-    """今日の記録：0時JSTから現在時刻までの全イベント"""
+    """今日の記録：0時ローカルから現在時刻までの全イベント"""
+    tz = get_tz()
     now_utc = datetime.now(timezone.utc)
-    today_jst = (now_utc + JST).date()
-    day_start_utc = (
-        datetime(today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc)
-        - JST
-    )
+    today_local = now_utc.astimezone(tz).date()
+    day_start_utc = datetime(
+        today_local.year, today_local.month, today_local.day, tzinfo=tz
+    ).astimezone(timezone.utc)
 
     conn = get_conn()
     try:
@@ -150,8 +135,8 @@ def build_today_message() -> str | None:
     lines = ["🐱 今日の記録\n"]
     prev_time = None
     for (received_at,) in rows:
-        jst_time = received_at + JST
-        time_str = jst_time.strftime("%H:%M")
+        local_time = received_at.astimezone(tz)
+        time_str = local_time.strftime("%H:%M")
         if prev_time is None:
             lines.append(time_str)
         else:
@@ -163,26 +148,27 @@ def build_today_message() -> str | None:
     return "\n".join(lines)
 
 
-def send_scheduled_notify(slot: str) -> None:
+def send_scheduled_notify(slot_idx: int) -> None:
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT value FROM feeding_rules WHERE key = 'notify_enabled'")
             row = cur.fetchone()
             if row and row[0] == "false":
-                logger.info("notify disabled, skip slot=%s", slot)
+                logger.info("notify disabled, skip slot_idx=%s", slot_idx)
                 return
     finally:
         conn.close()
 
-    body = build_scheduled_message(slot)
+    body = build_scheduled_message(slot_idx)
     if body is None:
-        slot_label = SLOT_LABELS.get(slot, slot)
+        slot_hour, slot_minute = NOTIFY_SLOTS[slot_idx]
+        slot_label = f"〜{slot_hour:02d}:{slot_minute:02d}"
         body = f"🐱 給餌まとめ（{slot_label}）\n\nこの時間帯の記録はありません"
 
     api = _get_line_api()
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=body)]))
-    logger.info("scheduled notify sent: slot=%s", slot)
+    logger.info("scheduled notify sent: slot_idx=%s", slot_idx)
 
     conn = get_conn()
     try:
@@ -215,18 +201,16 @@ def send_alert_if_needed() -> None:
                 return
 
             # 今日の発火済み確認
-            today_jst = (datetime.now(timezone.utc) + JST).date()
+            tz = get_tz()
+            today_jst = datetime.now(timezone.utc).astimezone(tz).date()
             cur.execute("SELECT 1 FROM alert_fired WHERE fired_date = %s", (today_jst,))
             if cur.fetchone():
                 return
 
             # 今日の給餌回数
-            day_start_utc = (
-                datetime(
-                    today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc
-                )
-                - JST
-            )
+            day_start_utc = datetime(
+                today_jst.year, today_jst.month, today_jst.day, tzinfo=tz
+            ).astimezone(timezone.utc)
             cur.execute(
                 "SELECT COUNT(*) FROM feed_events WHERE received_at >= %s",
                 (day_start_utc,),

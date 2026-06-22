@@ -9,6 +9,8 @@ os.environ["DEVICE_TOKEN"] = "test-token"
 os.environ["LINE_CHANNEL_SECRET"] = "test-secret"
 os.environ["LINE_CHANNEL_ACCESS_TOKEN"] = "test-access-token"
 os.environ["DB_NAME"] = "test-db"
+os.environ["TIMEZONE"] = "Asia/Tokyo"
+os.environ["NOTIFY_SLOTS"] = "11:00,16:00,21:00"
 
 from app.main import app
 
@@ -120,8 +122,8 @@ def test_build_scheduled_message_morning(mock_get_conn):
     mock_cur.fetchall.return_value = [(dt1,)]
 
     from app.line.notify import build_scheduled_message
-    message = build_scheduled_message("morning")
-    
+    message = build_scheduled_message(0)
+
     assert message is not None
     assert "給餌まとめ（〜11:00）" in message
     assert "10:00" in message
@@ -140,8 +142,8 @@ def test_build_scheduled_message_afternoon(mock_get_conn):
     mock_cur.fetchall.return_value = [(dt1,), (dt2,)]
 
     from app.line.notify import build_scheduled_message
-    message = build_scheduled_message("afternoon")
-    
+    message = build_scheduled_message(1)
+
     assert message is not None
     assert "給餌まとめ（〜16:00）" in message
     assert "10:00" in message

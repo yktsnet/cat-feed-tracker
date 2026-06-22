@@ -15,10 +15,9 @@ from linebot.v3.messaging import (
 )
 from app.db.connection import get_conn
 from app.line.notify import build_today_message
-from app.config import CAT_PROFILES
+from app.config import CAT_PROFILES, get_tz, TZ_NAME
 
 logger = logging.getLogger(__name__)
-JST = timedelta(hours=9)
 
 # ── ステート管理 ──────────────────────────────────────────────────────────────
 _waiting_limit_input: set[str] = set()
@@ -81,12 +80,12 @@ def _build_average_text() -> str:
     """給餌平均テキストを返す（体重記録後の表示にも流用）。
     平均は「記録がある日」のみを有効日として計算する。
     """
+    tz = get_tz()
     now_utc = datetime.now(timezone.utc)
-    today_jst = (now_utc + JST).date()
-    day_start_utc = (
-        datetime(today_jst.year, today_jst.month, today_jst.day, tzinfo=timezone.utc)
-        - JST
-    )
+    today_jst = now_utc.astimezone(tz).date()
+    day_start_utc = datetime(
+        today_jst.year, today_jst.month, today_jst.day, tzinfo=tz
+    ).astimezone(timezone.utc)
 
     conn = get_conn()
     try:
@@ -98,16 +97,16 @@ def _build_average_text() -> str:
                 cur.execute(
                     """
                     SELECT COUNT(*) AS total,
-                           COUNT(DISTINCT ((received_at AT TIME ZONE 'Asia/Tokyo')::date)) AS active_days
+                           COUNT(DISTINCT ((received_at AT TIME ZONE %s)::date)) AS active_days
                     FROM feed_events
                     WHERE received_at >= %s AND received_at < %s
                     """,
-                    (w_start, w_end),
+                    (TZ_NAME, w_start, w_end),
                 )
                 total, active_days = cur.fetchone()
                 avg = round(total / active_days, 1) if active_days > 0 else 0
-                w_start_jst = (w_start + JST).date()
-                w_end_jst = (w_end + JST).date()
+                w_start_jst = w_start.astimezone(tz).date()
+                w_end_jst = w_end.astimezone(tz).date()
                 week_lines.append(
                     f"  {w_start_jst.strftime('%m/%d')}〜{w_end_jst.strftime('%m/%d')}  {avg}回/日（{active_days}日）"
                 )
@@ -122,32 +121,26 @@ def _build_average_text() -> str:
                     m_end_jst = target.replace(year=target.year + 1, month=1, day=1)
                 else:
                     m_end_jst = target.replace(month=target.month + 1, day=1)
-                m_start_utc = (
-                    datetime(
-                        m_start_jst.year,
-                        m_start_jst.month,
-                        m_start_jst.day,
-                        tzinfo=timezone.utc,
-                    )
-                    - JST
-                )
-                m_end_utc = (
-                    datetime(
-                        m_end_jst.year,
-                        m_end_jst.month,
-                        m_end_jst.day,
-                        tzinfo=timezone.utc,
-                    )
-                    - JST
-                )
+                m_start_utc = datetime(
+                    m_start_jst.year,
+                    m_start_jst.month,
+                    m_start_jst.day,
+                    tzinfo=tz,
+                ).astimezone(timezone.utc)
+                m_end_utc = datetime(
+                    m_end_jst.year,
+                    m_end_jst.month,
+                    m_end_jst.day,
+                    tzinfo=tz,
+                ).astimezone(timezone.utc)
                 cur.execute(
                     """
                     SELECT COUNT(*) AS total,
-                           COUNT(DISTINCT ((received_at AT TIME ZONE 'Asia/Tokyo')::date)) AS active_days
+                           COUNT(DISTINCT ((received_at AT TIME ZONE %s)::date)) AS active_days
                     FROM feed_events
                     WHERE received_at >= %s AND received_at < %s
                     """,
-                    (m_start_utc, m_end_utc),
+                    (TZ_NAME, m_start_utc, m_end_utc),
                 )
                 total, active_days = cur.fetchone()
                 avg = round(total / active_days, 1) if active_days > 0 else 0
@@ -236,7 +229,7 @@ def handle_weight_record(user_id: str, reply_token: str, text: str) -> None:
 
     # DB保存
     now_utc = datetime.now(timezone.utc)
-    today_jst = (now_utc + JST).date()
+    today_jst = now_utc.astimezone(get_tz()).date()
 
     conn = get_conn()
     try:

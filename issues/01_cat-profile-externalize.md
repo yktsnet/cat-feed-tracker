@@ -2,7 +2,7 @@
 id: 01
 skill: pr-workflow
 branch-slug: cat-profile-externalize
-github_issue:
+github_issue: 1
 status: open
 type: feat
 対象: config/cats.yaml (新規), server/app/line/webhook.py, server/app/config.py (新規)

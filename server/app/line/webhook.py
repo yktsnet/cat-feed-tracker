@@ -15,6 +15,7 @@ from linebot.v3.messaging import (
 )
 from app.db.connection import get_conn
 from app.line.notify import build_today_message
+from app.config import CAT_PROFILES
 
 logger = logging.getLogger(__name__)
 JST = timedelta(hours=9)
@@ -24,8 +25,9 @@ _waiting_limit_input: set[str] = set()
 _waiting_weight_cat: set[str] = set()  # 猫番号の入力待ち
 _waiting_weight_input: dict[str, int] = {}  # user_id → cat_id、体重数値の入力待ち
 
-CAT_NAMES = {1: "タマ", 2: "ミケ", 3: "クロ"}
-CAT_EMOJI = {1: "🍑", 2: "🍫", 3: "🍙"}
+# config/cats.yaml から構築（1-indexed）
+CAT_NAMES = {i + 1: cat["name"] for i, cat in enumerate(CAT_PROFILES)}
+CAT_EMOJI = {i + 1: cat["emoji"] for i, cat in enumerate(CAT_PROFILES)}
 
 
 # ── 共通ユーティリティ ────────────────────────────────────────────────────────
@@ -185,12 +187,14 @@ def handle_settings(reply_token: str) -> None:
 # ── 体重ハンドラ ──────────────────────────────────────────────────────────────
 def handle_weight_start(reply_token: str) -> None:
     """猫の選択肢を表示し番号入力を促す"""
+    cat_lines = "\n".join(
+        f"{i + 1}. {cat['emoji']} {cat['name']}"
+        for i, cat in enumerate(CAT_PROFILES)
+    )
     body = (
         "⚖️ 体重を記録します\n\n"
         "猫を選んでください：\n"
-        "1. 🍑 タマ\n"
-        "2. 🍫 ミケ\n"
-        "3. 🍙 クロ\n\n"
+        f"{cat_lines}\n\n"
         "番号を送ってください\n"
         "（キャンセルする場合は「キャンセル」）"
     )
@@ -323,12 +327,13 @@ def handle_message(user_id: str, reply_token: str, text: str) -> None:
 
     # ── 猫番号の選択待ち ──
     if user_id in _waiting_weight_cat:
-        if text in ("1", "2", "3"):
+        if text.isdigit() and 1 <= int(text) <= len(CAT_PROFILES):
             handle_weight_cat_selected(user_id, reply_token, int(text))
         else:
+            valid = "・".join(str(i + 1) for i in range(len(CAT_PROFILES)))
             _reply(
                 reply_token,
-                "1・2・3 のいずれかを送ってください。\n（キャンセルする場合は「キャンセル」）",
+                f"{valid} のいずれかを送ってください。\n（キャンセルする場合は「キャンセル」）",
             )
         return
 

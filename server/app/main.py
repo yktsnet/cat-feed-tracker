@@ -1,9 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.api import events, webhook
 from app.line.notify import send_scheduled_notify, send_alert_if_needed
+from app.config import NOTIFY_SLOTS, TZ_NAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,10 +17,15 @@ scheduler = BackgroundScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 定時通知（UTC）
-    scheduler.add_job(send_scheduled_notify, "cron", hour=2,  minute=0, args=["morning"])
-    scheduler.add_job(send_scheduled_notify, "cron", hour=7,  minute=0, args=["afternoon"])
-    scheduler.add_job(send_scheduled_notify, "cron", hour=12, minute=0, args=["night"])
+    # 定時通知（NOTIFY_SLOTS のローカル時刻を TIMEZONE で解釈して登録）
+    tz = ZoneInfo(TZ_NAME)
+    for idx, (hour, minute) in enumerate(NOTIFY_SLOTS):
+        scheduler.add_job(
+            send_scheduled_notify, "cron",
+            hour=hour, minute=minute,
+            timezone=tz,
+            args=[idx],
+        )
     # 上限アラートチェック（5分ごと）
     scheduler.add_job(send_alert_if_needed, "interval", minutes=5)
     scheduler.start()

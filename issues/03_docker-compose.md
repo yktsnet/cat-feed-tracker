@@ -2,7 +2,7 @@
 id: 03
 skill: pr-workflow
 branch-slug: docker-compose
-github_issue:
+github_issue: 5
 status: open
 type: feat
 対象: Dockerfile (新規), docker-compose.yml (新規), README.md, .env.example, server/migrations/

@@ -3,7 +3,7 @@ id: 03
 skill: pr-workflow
 branch-slug: docker-compose
 github_issue: 5
-status: open
+status: close
 type: feat
 対象: Dockerfile (新規), docker-compose.yml (新規), README.md, .env.example, server/migrations/
 内容: clone → .env に LINE トークン記入 → docker compose up で動く構成を作る。一般ユーザー向けの導入手段

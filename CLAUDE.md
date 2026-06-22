@@ -6,7 +6,8 @@
 
 - テスト: `cd server && PYTHONPATH=. pytest`（外部 DB 不要なモック構成）
 - 構文チェック: `python -m py_compile server/app/main.py`（変更ファイルごと）
-- 依存インストール: `nix-shell --run "pip install -r server/requirements.txt -r server/requirements-dev.txt"`
+- 依存: `nix-shell` に入れば venv 作成と pip install が自動実行される。**`pip install` を直接実行しない**（`nix-shell` 外での pip / ensurepip は禁止）
+- テスト実行: `nix-shell --run "cd server && PYTHONPATH=. pytest"`
 
 ## アーキテクチャの要点
 

@@ -1,3 +1,5 @@
+[🇯🇵 日本語](deploy.md) | [🇬🇧 English](deploy.en.md)
+
 # 本番環境デプロイ手順 (Deployment)
 
 本ドキュメントでは、`cat-feed-tracker` のサーバー（VPSなど）への本番デプロイ手順について説明します。

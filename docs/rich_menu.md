@@ -1,3 +1,5 @@
+[🇯🇵 日本語](rich_menu.md) | [🇬🇧 English](rich_menu.en.md)
+
 # LINE リッチメニューと Webhook 連携仕様
 
 本ドキュメントでは、LINE Messaging API との連携設定、リッチメニューのボタン配置、および関連する操作仕様について説明します。

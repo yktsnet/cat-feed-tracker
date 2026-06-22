@@ -2,7 +2,7 @@
 id: 02
 skill: pr-workflow
 branch-slug: timezone-notify-config
-github_issue:
+github_issue: 3
 status: open
 type: feat
 対象: server/app/line/webhook.py, server/app/line/notify.py, server/app/main.py, .env.example

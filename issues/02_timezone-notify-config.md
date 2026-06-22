@@ -3,7 +3,7 @@ id: 02
 skill: pr-workflow
 branch-slug: timezone-notify-config
 github_issue: 3
-status: open
+status: close
 type: feat
 対象: server/app/line/webhook.py, server/app/line/notify.py, server/app/main.py, .env.example
 内容: ハードコードされたJST・通知時刻を環境変数で設定可能にし、日本以外でも使えるようにする

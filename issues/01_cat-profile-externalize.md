@@ -5,7 +5,7 @@ branch-slug: cat-profile-externalize
 github_issue: 1
 status: open
 type: feat
-対象: config/cats.yaml (新規), server/app/line/webhook.py, server/app/config.py (新規)
+対象: config/cats.yaml (新規), server/app/config.py (新規), server/app/line/webhook.py, server/requirements.txt
 内容: ハードコードされた猫名・絵文字・番号判定を設定ファイルに外部化し、任意の猫数で動作するようにする（OSS化の最低条件）
 確認: python -m py_compile で対象ファイルの構文確認、pytest 通過
 ---

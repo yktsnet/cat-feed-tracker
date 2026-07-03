@@ -171,6 +171,10 @@ For details on each configuration and production operations, refer to the follow
 - **[Production Deployment Guide](./docs/deploy.md)** (systemd, Nginx, connectivity checks, etc.)
 - **[LINE Rich Menu and Webhook Integration Spec](./docs/rich_menu.md)** (rich menu setup, interactive command flow, sample data)
 
+## How this was built
+
+Development follows an issue-driven workflow that separates design (interactive AI), implementation (autonomous AI), and verification (human merge). An AI agent implements each change starting from an issue file, and dangerous operations are blocked by configuration rather than by convention. The setup lives in [dotfiles-public](https://github.com/yktsnet/dotfiles-public); the process itself is visible in this repository's issues and PRs.
+
 ## License
 
 MIT

@@ -6,12 +6,28 @@
 
 An IoT system that detects open/close events of a feeding shelf via a reed switch on a Pico W and delivers LINE notifications to family members.
 
-<p align="center">
-  <picture>
-    <source media="(min-width: 800px)" srcset="./src/cat-feed-tracker.svg">
-    <img src="./src/cat-feed-tracker.svg" alt="cat-feed-tracker Architecture" style="max-width: 100%;" width="300">
-  </picture>
-</p>
+```mermaid
+flowchart TD
+    Cat(["🐱 Feeding Shelf"]) == "Opens" ==> Switch["🔌 Reed Switch"]
+    
+    subgraph Pico["Pico W"]
+        Switch --> Logic["🧠 MicroPython"]
+    end
+
+    subgraph Server["VPS (Hetzner)"]
+        API["🌐 FastAPI"] --> DB[("🗄️ PostgreSQL 16")]
+    end
+    
+    subgraph LINE["LINE Messaging API"]
+        Webhook["📥 Webhook"]
+        Push["📤 Broadcast / Reply"]
+    end
+
+    Logic -. "HTTPS POST" .-> API
+    API -. "Summary / Alert" .-> Push
+    Webhook -. "User Command" .-> API
+```
+
 
 ## Quick Start
 

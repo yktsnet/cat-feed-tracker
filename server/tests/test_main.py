@@ -162,3 +162,67 @@ def test_line_webhook_invalid_signature(mock_parser):
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "invalid signature"}
+
+@patch("app.api.webhook.parser")
+def test_line_webhook_parse_error_returns_ok(mock_parser):
+    # 署名検証以外のパース失敗（空bodyの検証リクエスト等）は例外を握りつぶして200を返す
+    mock_parser.parse.side_effect = Exception("boom")
+
+    response = client.post(
+        "/api/webhook/line",
+        headers={"X-Line-Signature": "some-sig"},
+        content="",
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+def test_events_missing_authorization_header():
+    response = client.post(
+        "/api/events",
+        json={"note": "test"},
+    )
+    assert response.status_code == 422
+
+@patch("app.line.notify.get_conn")
+def test_build_today_message_no_events_returns_none(mock_get_conn):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+
+    mock_cur.fetchall.return_value = []
+
+    from app.line.notify import build_today_message
+    assert build_today_message() is None
+
+@patch("app.line.notify.get_conn")
+def test_build_scheduled_message_no_events_returns_none(mock_get_conn):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+
+    mock_cur.fetchall.return_value = []
+
+    from app.line.notify import build_scheduled_message
+    assert build_scheduled_message(0) is None
+
+@patch("app.line.notify.get_conn")
+def test_build_today_message_respects_timezone_env(mock_get_conn, monkeypatch):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+
+    # UTCで10:00のイベント。UTC設定なら10:00、JST設定なら19:00と表示が変わるはず
+    dt1 = datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc)
+    mock_cur.fetchall.return_value = [(dt1,)]
+
+    monkeypatch.setenv("TIMEZONE", "UTC")
+
+    from app.line.notify import build_today_message
+    message = build_today_message()
+
+    assert message is not None
+    assert "10:00" in message
+    assert "19:00" not in message

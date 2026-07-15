@@ -176,6 +176,43 @@ def test_line_webhook_parse_error_returns_ok(mock_parser):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+def test_line_webhook_valid_signature_dispatches_to_handle_message():
+    # 正常系: 実署名（HMAC-SHA256）で本物のパーサを通し、handle_message に到達することを検証
+    import base64
+    import hashlib
+    import hmac
+    import json
+
+    body = json.dumps({
+        "destination": "Udestination",
+        "events": [{
+            "type": "message",
+            "mode": "active",
+            "timestamp": 1750000000000,
+            "webhookEventId": "01TESTEVENTID",
+            "deliveryContext": {"isRedelivery": False},
+            "source": {"type": "user", "userId": "U-test-user"},
+            "replyToken": "reply-token-1",
+            "message": {"type": "text", "id": "100001", "quoteToken": "q", "text": "ごはん"},
+        }],
+    })
+    signature = base64.b64encode(
+        hmac.new(b"test-secret", body.encode("utf-8"), hashlib.sha256).digest()
+    ).decode()
+
+    with patch("app.api.webhook.handle_message") as mock_handle:
+        response = client.post(
+            "/api/webhook/line",
+            headers={"X-Line-Signature": signature},
+            content=body,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    mock_handle.assert_called_once_with(
+        user_id="U-test-user", reply_token="reply-token-1", text="ごはん"
+    )
+
 def test_events_missing_authorization_header():
     response = client.post(
         "/api/events",

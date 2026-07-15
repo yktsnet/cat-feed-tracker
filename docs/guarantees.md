@@ -1,7 +1,5 @@
 # 保証台帳
 
-このリポの「契約面」（外部から観測可能な振る舞い）のうち、テストによって固定されている保証を一覧にする。地位は [design-decisions.md](../context/design-decisions.md) 相当のドキュメントと同格であり、実装が本台帳と食い違う場合は不整合として指摘対象になる。
-
 ## 保証
 
 ### 1. tests/test_main.py — HTTP API（`server/app/api/events.py` / `server/app/api/webhook.py`）
@@ -43,6 +41,8 @@
 | 時刻表記は `TIMEZONE` 環境変数に従う | `test_build_today_message_respects_timezone_env` |
 
 ## この台帳について
+
+このリポの「契約面」（外部から観測可能な振る舞い）のうち、テストによって固定されている保証を一覧にする。地位は [design-decisions.md](../context/design-decisions.md) 相当のドキュメントと同格であり、実装が本台帳と食い違う場合は不整合として指摘対象になる。
 
 ### 対象範囲
 

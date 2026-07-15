@@ -42,10 +42,6 @@
 | イベント0件は `None` を返す | `test_build_today_message_no_events_returns_none`, `test_build_scheduled_message_no_events_returns_none` |
 | 時刻表記は `TIMEZONE` 環境変数に従う | `test_build_today_message_respects_timezone_env` |
 
-## Gaps
-
-現時点でなし（対象範囲内で保証化を見送ったテスト欠落は無い）。
-
 ## About
 
 対象は HTTP API のレスポンス（`GET /healthz`・`POST /api/events`・`POST /api/webhook/line`）と、LINE 通知メッセージの文言フォーマット（`build_today_message` / `build_scheduled_message`。内部実装だが戻り値がそのまま通知本文になるため契約面扱い）。対象外は DB スキーマ・SQL・APScheduler のジョブ登録・Pico W 側実装。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 地位は design-decisions.md 相当のドキュメントと同格。

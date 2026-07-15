@@ -1,8 +1,8 @@
-# 保証台帳
+# Guarantee Ledger
 
-## 保証
+## Guarantees
 
-### 1. tests/test_main.py — HTTP API（`server/app/api/events.py` / `server/app/api/webhook.py`）
+### 1. `tests/test_main.py` — HTTP API（`server/app/api/events.py` / `server/app/api/webhook.py`）
 
 - `GET /healthz` は 200 で `{"status": "ok"}` を返す
 - `POST /api/events` に `Authorization` ヘッダのトークンが `DEVICE_TOKEN` と一致しない（または `Bearer` スキームでない）場合、401 で `{"detail": "unauthorized"}` を返す
@@ -24,7 +24,7 @@
 | `/api/webhook/line` 署名検証失敗は 400 | `test_line_webhook_invalid_signature` |
 | `/api/webhook/line` 署名検証以外のパース失敗は握りつぶして 200 | `test_line_webhook_parse_error_returns_ok` |
 
-### 2. tests/test_main.py — LINE通知メッセージ（`build_today_message` / `build_scheduled_message`、`server/app/line/notify.py`）
+### 2. `tests/test_main.py` — LINE通知メッセージ（`build_today_message` / `build_scheduled_message`、`server/app/line/notify.py`）
 
 - `build_today_message` は当日イベントがある場合、`"今日の記録"` を含む見出しから始まり、各イベント時刻を `HH:MM` 形式で列挙し、2件目以降は直前イベントとの差分を `+N時間M分` 形式で付記し、末尾に `"本日計N回"` を含む
 - `build_scheduled_message(slot_idx)` はそのスロットの終端時刻までのイベントがある場合、見出しに `"給餌まとめ（〜HH:MM）"`（スロット終端時刻）を含み、時刻・経過時間の表記は `build_today_message` と同様で、末尾に `"本日計N回"` を含む
@@ -40,20 +40,6 @@
 | イベント0件は `None` を返す | `test_build_today_message_no_events_returns_none`, `test_build_scheduled_message_no_events_returns_none` |
 | 時刻表記は `TIMEZONE` 環境変数に従う | `test_build_today_message_respects_timezone_env` |
 
-## この台帳について
+## About
 
-このリポの「契約面」（外部から観測可能な振る舞い）のうち、テストによって固定されている保証を一覧にする。地位は [design-decisions.md](../context/design-decisions.md) 相当のドキュメントと同格であり、実装が本台帳と食い違う場合は不整合として指摘対象になる。
-
-### 対象範囲
-
-- HTTP API のレスポンス（ステータスコード・ボディ）: `GET /healthz`、`POST /api/events`、`POST /api/webhook/line`
-- LINE 通知メッセージの文言フォーマット（見出し・時刻表記・経過時間表記・区切り線・合計回数表記）: `build_today_message` / `build_scheduled_message`（`server/app/line/notify.py`）。関数自体は内部実装だが、戻り値はそのまま LINE 上でユーザーが目にする通知本文になるため契約面として扱う。
-
-### 対象外（内部実装）
-
-- DB スキーマ・SQL クエリの具体的な発行内容
-- `send_scheduled_notify` / `send_alert_if_needed` の内部制御フロー（DB 更新順序、`notification_logs` / `alert_fired` への書き込みタイミングなど）
-- APScheduler のジョブ登録自体（`main.py`）
-- Pico W 側（`pico/main.py`）の実装
-
-**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。**
+対象は HTTP API のレスポンス（`GET /healthz`・`POST /api/events`・`POST /api/webhook/line`）と、LINE 通知メッセージの文言フォーマット（`build_today_message` / `build_scheduled_message`。内部実装だが戻り値がそのまま通知本文になるため契約面扱い）。対象外は DB スキーマ・SQL・APScheduler のジョブ登録・Pico W 側実装。**ここに載っていない振る舞いは約束ではなく、予告なく変わりうる。** 地位は [design-decisions.md](../context/design-decisions.md) 相当のドキュメントと同格。

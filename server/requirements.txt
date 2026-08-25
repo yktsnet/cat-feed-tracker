@@ -1,7 +1,7 @@
 fastapi==0.141.1
-uvicorn[standard]==0.52.1
+uvicorn[standard]==0.52.3
 psycopg2-binary==2.9.12
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 line-bot-sdk==3.25.0
 apscheduler==3.11.3
 pyyaml==6.0.3

@@ -124,6 +124,8 @@ docker compose exec db psql -U cat_feed -d cat_feed \
 - カメラ等による画像・映像記録
 - 複数世帯でのマルチテナント運用
 
+外へ約束している振る舞いとそれを守るテストは [保証台帳](docs/guarantees/README.md) にまとめている。
+
 ## Development
 
 Docker を使わずローカルで開発・実行する場合の手順です。

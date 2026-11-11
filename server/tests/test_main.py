@@ -263,3 +263,88 @@ def test_build_today_message_respects_timezone_env(mock_get_conn, monkeypatch):
     assert message is not None
     assert "10:00" in message
     assert "19:00" not in message
+
+@patch("app.api.events.get_conn")
+def test_events_success_inserts_feed_event(mock_get_conn):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+
+    now = datetime.now(timezone.utc)
+    mock_cur.fetchone.side_effect = [(1,), None, (10, now)]
+
+    response = client.post(
+        "/api/events",
+        headers={"Authorization": "Bearer test-token"},
+        json={"note": "test"},
+    )
+    assert response.status_code == 201
+    inserts = [
+        c for c in mock_cur.execute.call_args_list
+        if "INSERT INTO feed_events" in c.args[0]
+    ]
+    assert len(inserts) == 1
+
+def test_scheduler_registers_notify_slots_in_timezone():
+    from zoneinfo import ZoneInfo
+    from app.main import scheduler
+    from app.line.notify import send_scheduled_notify
+
+    with TestClient(app):
+        jobs = [j for j in scheduler.get_jobs() if j.func is send_scheduled_notify]
+        assert sorted(j.args[0] for j in jobs) == [0, 1, 2]
+        for job in jobs:
+            fields = {f.name: str(f) for f in job.trigger.fields}
+            expected_hour = ["11", "16", "21"][job.args[0]]
+            assert fields["hour"] == expected_hour
+            assert fields["minute"] == "0"
+            assert job.trigger.timezone == ZoneInfo("Asia/Tokyo")
+
+@patch("app.line.notify._get_line_api")
+@patch("app.line.notify.get_conn")
+def test_send_scheduled_notify_empty_slot_message(mock_get_conn, mock_get_api):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+    mock_cur.fetchone.return_value = ("true",)
+    mock_cur.fetchall.return_value = []
+
+    from app.line.notify import send_scheduled_notify
+    send_scheduled_notify(0)
+
+    api = mock_get_api.return_value
+    api.broadcast.assert_called_once()
+    body = api.broadcast.call_args.args[0].messages[0].text
+    assert "給餌まとめ（〜11:00）" in body
+    assert "この時間帯の記録はありません" in body
+
+@patch("app.line.notify._get_line_api")
+@patch("app.line.notify.get_conn")
+def test_send_scheduled_notify_disabled_sends_nothing(mock_get_conn, mock_get_api):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+    mock_cur.fetchone.return_value = ("false",)
+
+    from app.line.notify import send_scheduled_notify
+    send_scheduled_notify(0)
+
+    mock_get_api.return_value.broadcast.assert_not_called()
+
+@patch("app.line.notify._get_line_api")
+@patch("app.line.notify.get_conn")
+def test_send_alert_if_needed_disabled_sends_nothing(mock_get_conn, mock_get_api):
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_get_conn.return_value = mock_conn
+    # alert_limit=1、notify_enabled=false、以降は呼ばれても上限超過・未発火になる値
+    mock_cur.fetchone.side_effect = [("1",), ("false",), None, (100,)]
+
+    from app.line.notify import send_alert_if_needed
+    send_alert_if_needed()
+
+    mock_get_api.return_value.broadcast.assert_not_called()

@@ -124,6 +124,8 @@ This tool records the open/close events of a reed switch attached to the feeding
 - Image or video recording via cameras, etc.
 - Multi-tenant operation across multiple households
 
+The behaviors this project guarantees, and the tests that protect them, are listed in the [Guarantee Ledger](docs/guarantees/README.md) (Japanese).
+
 ## Development
 
 Steps for developing and running locally without Docker.
